@@ -4,8 +4,8 @@ import ReactMarkdown from 'react-markdown'
 import { Bot, Network, X, Send, ChevronRight, Activity, Search } from 'lucide-react'
 import './App.css'
 
-// Automatically switch to relative paths when deployed under FastAPI
-const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
+// Point to local FastAPI in dev, but live Railway API in production Vercel
+const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : 'https://web-production-44d0b.up.railway.app'
 
 // Modern refined color palette
 const GROUP_COLORS = {
