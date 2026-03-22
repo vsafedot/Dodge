@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+networkx
+google-genai
+python-dotenv
+sqlalchemy
