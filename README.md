@@ -1,68 +1,48 @@
 # 🌐 NexusGraph O2C (SAP Context Graph)
 
-NexusGraph O2C is a full-stack, AI-powered visualizer for traversing and analyzing the complex lifecycle of SAP Order-to-Cash (O2C) datasets. It ingests raw, fragmented JSONL data across Sales Orders, Deliveries, and Invoices, strictly mapping them into a unified embedded SQLite graph architecture.
-
-It features a breathtaking floating **"Glassmorphism" UI** layered over a dynamic force-directed 2D canvas, empowering users to query real business data instantly using pure natural language via the **Groq LLaMA** engine.
+NexusGraph O2C is a full-stack, AI-powered visualizer for traversing and analyzing the complex lifecycle of SAP Order-to-Cash (O2C) datasets. It ingests raw, fragmented JSONL data across Sales Orders, Deliveries, and Invoices, strictly mapping them into a unified embedded graph architecture.
 
 ---
 
-## ✨ Key Features
-- **Relational Ingestion Pipeline:** Natively ingests thousands of unstructured JSON lines into a heavily indexed SQLite database schema, preserving rigid foreign keys (Customer → Sales Order → Delivery → Invoice).
-- **Infinite Canvas & Node Inspector:** Renders up to thousands of nodes and edges flawlessly using `react-force-graph`. Selecting any node opens a dynamic inspector panel detailing its specific database properties.
-- **AI Business Intelligence:** Leverages the blazing-fast `llama-3.3-70b-versatile` reasoning model via the Groq API. Users can ask questions in natural language (e.g., *"List all canceled billing documents"*) which the engine converts securely to SQL, executes under strict context guards, and returns beautifully formatted Markdown Tables natively in the chat.
-- **Unified Deployment:** Fully compatible with local two-tier setups as well as single-process `StaticFiles` mounting for effortless cloud deployment (e.g. Railway or Render).
+## 🏗️ Architecture Decisions
+- **Monolithic Data, Decoupled Serving:** The backend handles both API generation (FastAPI) and raw SQL execution entirely in Python, while the UI is fully decoupled in React (Vite). This ensures UI rendering blockages don't interfere with the asynchronous API calls made to the LLM. For deployment, the system supports both split hosting (Vercel Frontend + Railway Backend) AND a unified single-server `StaticFiles` mount for extreme portability.
+- **Frontend Graphing Engine:** Utilizes `react-force-graph-2d` layered under a premium absolute-positioned "glassmorphism" HUD, allowing hardware-accelerated rendering of thousands of nodes while preserving a sleek, responsive chat and inspector interface.
+- **Dynamic Node Inspector:** When a node is clicked, the UI dynamically extracts and maps every underlying database property assigned to that entity, bypassing the need for redundant API calls for metadata.
 
----
+## 🗄️ Database Choice: Relational SQLite
+While Graph Databases (like Neo4j) are often standard for node visualizations, **SQLite** was explicitly chosen for this system due to the highly structured nature of SAP O2C data.
+1. **Relational Integrity:** JSONL fragments dynamically feed into rigid SQL tables (e.g., Sales Orders inherently link to Deliveries). Using Foreign Keys drastically optimized node tracking compared to loose NoSQL models.
+2. **Speed & Portability:** An embedded SQLite database allowed instantaneous ingestion scaling and requires zero environment overhead to spin up in deployment (unlike spinning up a Postgres instance).
+3. **LLM Synergy:** Generative AI models are historically massively tuned on standard SQL syntax compared to specific graph query languages (like Cypher). Feeding an LLM a relational schema yields significantly lower hallucination rates.
 
-## 🛠️ Technology Stack
-- **Backend Infrastructure:** Python 3.12, FastAPI, SQLite3, Uvicorn 
-- **AI & Integrations:** Groq SDK (`llama-3.3-70b-versatile`)
-- **Frontend Architecture:** React 19, Vite, `react-force-graph-2d`, `lucide-react`, `react-markdown`
+## 🤖 LLM Prompting Strategy (Groq/LLaMA)
+Because speed is a priority for UX, the system utilizes the blazing-fast **Groq API** running `llama-3.3-70b-versatile` in a **Two-Pass Reasoning Chain**:
+1. **Pass 1 - Query Translation:** The LLM is fed the raw database schema and the natural language question. Its sole instruction is to output an executable SQL query. Temperature is strictly clamped to `0.0`.
+2. **Pass 2 - Insight Generation:** The python backend executes the SQL on the local SQLite DB and extracts up to 100 rows of matched data. This hard factual data is fed back into the LLM context window alongside the original question. The LLM is then prompted to format this data into responsive **Markdown Tables** and explain the business lifecycle behind it, preventing *any* hallucinations because it is simply repeating known data.
+
+## 🛡️ Security Guardrails & Edge Cases
+- **Regex Query Isolation:** LLMs occasionally append conversational fluff (e.g., *"Here is your query: ```sql..."*). A rigid Python regex handler (`r'```(?:sql)?\s*(.*?)\s*```'`) was built to forcefully isolate and extract the raw SQL, preventing the entire pipeline from crashing on syntax errors.
+- **SQL Leak Prevention:** If an execution error occurs, the pipeline catches it and maps it to a safe, generic frontend warning (*"I'm sorry, I couldn't process this request"*), entirely preventing the backend schema tables and raw SQL error logs from bleeding to the end-user.
+- **System Constraints:** The system prompt aggressively restricts the AI: *"SECURITY CONSTRAINTS: NEVER mention SQL, databases, tables, schemas, backend logic, or internal queries. Act as a seamless business intelligence assistant."* This ensures the UX remains completely native and professional without breaking the "magic" of the application.
 
 ---
 
 ## 🚀 Quickstart (Local Development)
 
-### 1. Backend Setup
-1. Clone the repository and navigate to the project root.
-2. Install the necessary Python backend elements:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Initialize the database using the raw JSONL datasets provided in `/sap-o2c-data`:
-   ```bash
-   python ingest.py
-   ```
-4. Create a file named `api.txt` in the root folder and paste your **Groq API Key** inside it (e.g. `gsk_XXXXX`).
-5. Spin up the FastAPI server:
-   ```bash
-   python -m uvicorn app:app --reload
-   ```
+**1. Infrastructure Setup**
+```bash
+pip install -r requirements.txt
+python ingest.py  # Builds the SQLite DB from /sap-o2c-data
+```
+*Note: Create an `api.txt` in the root folder with your Groq `gsk_` API Key.*
 
-### 2. Frontend Setup
-1. Open a new terminal and navigate into the UI directory:
-   ```bash
-   cd frontend
-   npm install
-   ```
-2. Start the Vite development server:
-   ```bash
-   npm run dev
-   ```
-3. Visit `http://localhost:5173` in your browser to experience NexusGraph.
+**2. Run the Backend & Frontend**
+```bash
+# Terminal 1 (API Server)
+python -m uvicorn app:app --reload
 
----
-
-## ☁️ Production Deployment
-
-NexusGraph supports single-server deployments (like Render or Railway) where the FastAPI instance natively mounts the compiled React bundle.
-1. Compile the React payload:
-   ```bash
-   cd frontend
-   npm run build
-   ```
-2. Push the entire repository (ensure your generated `sap_o2c.db` is tracked if you want the data seeded!).
-3. Host standard python configurations using the provided `Procfile`, automatically pointing to the generated `/dist` folder.
-
----
-**Note:** For secure deployments, all SQL mapping architectures, error logs, and internal pipeline states are explicitly hidden from the user chat output via robust LLM regex extraction scripts and strict developer prompts.
+# Terminal 2 (React UI)
+cd frontend
+npm install
+npm run dev
+```
