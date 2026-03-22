@@ -1,6 +1,6 @@
 fastapi
 uvicorn
 networkx
-google-genai
+groq
 python-dotenv
 sqlalchemy
